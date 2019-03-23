@@ -15,7 +15,7 @@ def train():
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
     with tf.Session(config=config) as sess:
-        config = CNNConfig('MULTI')
+        config = CNNConfig('CHAR-RANDOM')
         cnn = TextCNN(config)
         cnn.prepare_data()
         cnn.setCNN()
@@ -78,6 +78,8 @@ def train():
         # 验证步骤
         def valid_step(next_valid_element):
             # 把valid_loss和valid_accuracy归0
+            y_true = []
+            y_pred = []
             valid_loss = 0.0
             valid_accuracy = 0.0
             valid_precision = 0.0
@@ -94,26 +96,18 @@ def train():
                         cnn.dropout_keep_prob: 1.0,
                         cnn.training: False
                     }
-                    loss, accuracy, prediction, y_true = sess.run([cnn.loss, cnn.accuracy, cnn.prediction, cnn.labels], feed_dict)
-
-                    precision = sk.metrics.precision_score(y_true=y_true, y_pred=prediction, average='weighted')
-                    recall = sk.metrics.recall_score(y_true=y_true, y_pred=prediction, average='weighted')
-                    f1_score = sk.metrics.f1_score(y_true=y_true, y_pred=prediction, average='weighted')
-
+                    loss, pred, true = sess.run([cnn.loss, cnn.prediction, cnn.labels], feed_dict)
+                    y_pred.extend(pred)
+                    y_true.extend(true)
                     valid_loss += loss
-                    valid_accuracy += accuracy
-                    valid_precision += precision
-                    valid_recall += recall
-                    valid_f1_score += f1_score
                     i += 1
-
                 except tf.errors.OutOfRangeError:
-                    # 遍历完验证集，然后对loss和accuracy求平均值
+                    # 遍历完验证集，计算评估
                     valid_loss /= i
-                    valid_accuracy /= i
-                    valid_precision /= i
-                    valid_recall /= i
-                    valid_f1_score /= i
+                    valid_accuracy = metrics.accuracy_score(y_true=y_true, y_pred=y_pred)
+                    valid_precision = metrics.precision_score(y_true=y_true, y_pred=y_pred, average='weighted')
+                    valid_recall = metrics.recall_score(y_true=y_true, y_pred=y_pred, average='weighted')
+                    valid_f1_score = metrics.f1_score(y_true=y_true, y_pred=y_pred, average='weighted')
 
                     t = datetime.datetime.now().strftime('%m-%d %H:%M')
                     log = '%s: epoch %d, validation loss: %0.6f, accuracy: %0.6f' % (
@@ -121,7 +115,7 @@ def train():
                     log = log + '\n' + ('precision: %0.6f, recall: %0.6f, f1_score: %0.6f' % (
                         valid_precision, valid_recall, valid_f1_score))
                     print(log)
-                    log_file.write(log+'\n')
+                    log_file.write(log + '\n')
                     time.sleep(3)
                     return
 
